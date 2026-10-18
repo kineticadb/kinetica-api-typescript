@@ -1,0 +1,70 @@
+{
+    "name": "@kinetica/gpudb-api",
+    "version": "7.2.3-3",
+    "description": "Kinetica Database JavaScript/TypeScript API",
+    "main": "dist/node/index.js",
+    "module": "dist/esm/index.mjs",
+    "browser": {
+        "./dist/node/index.js": "./dist/browser/index.js",
+        "http": false,
+        "https": false,
+        "url": false,
+        "fs": false,
+        "path": false,
+        "os": false
+    },
+    "types": "dist/types/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/types/index.d.ts",
+            "browser": "./dist/browser/index.js",
+            "import": {
+                "types": "./dist/esm/index.d.mts",
+                "default": "./dist/esm/index.mjs"
+            },
+            "require": {
+                "types": "./dist/types/index.d.ts",
+                "default": "./dist/node/index.js"
+            }
+        },
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "npm run build:node && npm run build:browser && npm run build:esm",
+        "prepare": "npm run build && npm run build:standalone",
+        "build:standalone": "npm run build:browser && esbuild ./dist/browser/standalone.js --bundle --format=iife --global-name=__kinetica --platform=browser --keep-names --footer:js=globalThis.GPUdb=__kinetica.GPUdb --outfile=dist/standalone/GPUdb.js",
+        "build:node": "tsc -p tsconfig.json",
+        "build:browser": "tsc -p tsconfig.browser.json",
+        "build:esm": "node scripts/copy-esm.js",
+        "clean": "rm -rf dist",
+        "test": "echo \"The test suite is not published with this repository.\" && exit 1"
+    },
+    "keywords": [
+        "kinetica",
+        "gpudb",
+        "database",
+        "api",
+        "client"
+    ],
+    "author": "Kinetica DB Inc.",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/kineticadb/kinetica-api-typescript.git"
+    },
+    "devDependencies": {
+        "typescript": "^5.0.0",
+        "@types/node": "^20.0.0",
+        "@types/mocha": "^10.0.0",
+        "mocha": "^10.0.0",
+        "ts-node": "^10.9.0",
+        "esbuild": "^0.28.0",
+        "avsc": "^5.7.9"
+    },
+    "engines": {
+        "node": ">=16.0.0"
+    }
+}

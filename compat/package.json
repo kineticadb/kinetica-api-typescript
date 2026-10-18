@@ -1,0 +1,31 @@
+{
+    "name": "@kinetica/gpudb",
+    "version": "7.2.3-3",
+    "description": "Kinetica NodeJS Client API (compatibility wrapper -- use @kinetica/gpudb-api)",
+    "main": "GPUdb.js",
+    "types": "index.d.ts",
+    "files": [
+        "GPUdb.js",
+        "index.d.ts",
+        "README.md"
+    ],
+    "keywords": [
+        "kinetica",
+        "gpudb",
+        "database",
+        "api",
+        "client"
+    ],
+    "author": "Kinetica DB Inc.",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/kineticadb/kinetica-api-typescript.git"
+    },
+    "dependencies": {
+        "@kinetica/gpudb-api": "7.2.3-3"
+    },
+    "engines": {
+        "node": ">=16.0.0"
+    }
+}
