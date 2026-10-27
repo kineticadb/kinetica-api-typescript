@@ -7,7 +7,13 @@ var __kinetica = (() => {
   var __getProtoOf = Object.getPrototypeOf;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
   var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
-  var __commonJS = (cb, mod) => function __require() {
+  var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+    get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+  }) : x)(function(x) {
+    if (typeof require !== "undefined") return require.apply(this, arguments);
+    throw Error('Dynamic require of "' + x + '" is not supported');
+  });
+  var __commonJS = (cb, mod) => function __require2() {
     try {
       return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
     } catch (e) {
@@ -51,6 +57,12 @@ var __kinetica = (() => {
   // (disabled):http
   var require_http = __commonJS({
     "(disabled):http"() {
+    }
+  });
+
+  // (disabled):crypto
+  var require_crypto = __commonJS({
+    "(disabled):crypto"() {
     }
   });
 
@@ -2320,6 +2332,65 @@ var __kinetica = (() => {
   __name(isWmsExceptionBody, "isWmsExceptionBody");
   var AVRO_CONTENT_TYPE = "application/octet-stream";
   var RESPONSE_ENVELOPE_SCHEMA = '{"type":"record","name":"gpudb_response","fields":[{"name":"status","type":"string"},{"name":"message","type":"string"},{"name":"data_type","type":"string"},{"name":"data","type":"bytes"},{"name":"data_str","type":"string"}]}';
+  function basicCredentials(username, password) {
+    let binary = "";
+    for (const byte of new TextEncoder().encode(`${username}:${password}`)) {
+      binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
+  }
+  __name(basicCredentials, "basicCredentials");
+  var SESSION_HEADER = "X-Kinetica-Session";
+  var SESSION_ID_USED = "session_id_used";
+  var SESSION_DROP_TIMEOUT = 1e4;
+  function newSessionId() {
+    const webCrypto = globalThis.crypto;
+    if (typeof webCrypto?.randomUUID === "function") {
+      return webCrypto.randomUUID();
+    }
+    if (typeof webCrypto?.getRandomValues === "function") {
+      const bytes = webCrypto.getRandomValues(new Uint8Array(16));
+      bytes[6] = bytes[6] & 15 | 64;
+      bytes[8] = bytes[8] & 63 | 128;
+      const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
+    const nodeCrypto = typeof __require === "function" ? require_crypto() : void 0;
+    if (typeof nodeCrypto?.randomUUID === "function") {
+      return nodeCrypto.randomUUID();
+    }
+    throw new Error("No secure random number source (Web Crypto) to name a session with; set the session_id option");
+  }
+  __name(newSessionId, "newSessionId");
+  var SessionCleanup = class {
+    static {
+      __name(this, "SessionCleanup");
+    }
+    constructor(transport) {
+      this.transport = transport;
+    }
+    get armed() {
+      return this.request !== void 0;
+    }
+    arm(request) {
+      this.request = request;
+    }
+    disarm() {
+      this.request = void 0;
+    }
+    run() {
+      const request = this.request;
+      if (request === void 0) {
+        return;
+      }
+      this.request = void 0;
+      this.transport.request(request).catch(() => void 0);
+    }
+  };
+  var SESSION_CLEANER = (() => {
+    const Registry = globalThis.FinalizationRegistry;
+    return Registry ? new Registry((cleanup) => cleanup.run()) : void 0;
+  })();
   function avroContext(err, context) {
     if (!(err instanceof AvroError)) {
       return err;
@@ -2414,8 +2485,10 @@ var __kinetica = (() => {
         "Accept",
         "Authorization",
         "Content-Type",
-        "X-Kinetica-Group"
+        "X-Kinetica-Group",
+        SESSION_HEADER
       ];
+      this.closed = false;
       const urls = (Array.isArray(url) ? url : [url]).map((one) => one.replace(/\/+$/, ""));
       for (const one of urls) {
         const protocol = _GPUdb.parseServerUrl(one).protocol;
@@ -2443,11 +2516,14 @@ var __kinetica = (() => {
       if (this.oauthToken) {
         this.authorization = `Bearer ${this.oauthToken}`;
       } else if (this.username || this.password) {
-        this.authorization = `Basic ${base64Encode(`${this.username}:${this.password}`)}`;
+        this.authorization = `Basic ${basicCredentials(this.username, this.password)}`;
       } else {
         this.authorization = "";
       }
       this.transport = options.transport ?? createTransport();
+      this.ownsSession = !options.session_id;
+      this.sessionId = options.session_id || newSessionId();
+      this.sessionCleanup = new SessionCleanup(this.transport);
     }
     /**
      * Gets the current server URL.
@@ -2569,6 +2645,87 @@ var __kinetica = (() => {
      */
     get_http_headers() {
       return this.getHttpHeaders();
+    }
+    /**
+     * Closes this client: drops the SQL `#name` temp tables it created, if
+     * any. The client cannot be used afterwards: every request fails at once,
+     * without failing over. Closing a closed client does nothing, and a close
+     * already under way is waited for.
+     *
+     * The drop fails over like any request. A failure is logged, not thrown,
+     * since the server reclaims the session on its own. It is skipped where no
+     * temp table was created, and against a server that does not support
+     * session temp tables, which never reports one. A session given by
+     * {@link GPUdbOptions.session_id} is not dropped: the caller drops it with
+     * `drop_session()`.
+     *
+     * A client that is never closed still has its temp tables dropped when it
+     * is garbage collected, on a best-effort basis, where the runtime has
+     * FinalizationRegistry; failing that, the server reclaims them on its own.
+     * Closing it is what makes the drop prompt.
+     *
+     * @returns Promise resolving once the client is closed
+     */
+    close() {
+      this.closing ?? (this.closing = this.closeOnce());
+      return this.closing;
+    }
+    /** Whether {@link GPUdb.close} has finished closing this client. */
+    is_closed() {
+      return this.closed;
+    }
+    async closeOnce() {
+      SESSION_CLEANER?.unregister(this);
+      if (this.sessionCleanup.armed) {
+        this.sessionCleanup.disarm();
+        try {
+          await this.submitRequestAsync("/drop/session", { options: {} });
+        } catch (err) {
+          console.warn(`Unable to drop session <${this.sessionId}>: ${toError(err).message}`);
+        }
+      }
+      this.closed = true;
+    }
+    /** The error every request of a closed client fails with. */
+    closedError() {
+      return new Error(`Cannot submit a request to ${this.url}: the connection has been closed`);
+    }
+    /**
+     * Notes whether a response reports this client's session as used, in
+     * which case close() (or collection) must drop it. Once set, it stays set:
+     * a spurious drop costs one round trip, a missed one strands tables until
+     * the server reclaims them.
+     *
+     * Arming prepares the request as it stands: to the cluster in use now,
+     * with the headers of the moment, the session's among them. A session the
+     * caller gave is never armed, as it is the caller's to drop.
+     */
+    noteSessionUsed(payload) {
+      if (!this.ownsSession || this.closing !== void 0 || this.sessionCleanup.armed) {
+        return;
+      }
+      const info = payload?.info;
+      if (info === null || typeof info !== "object" || String(info[SESSION_ID_USED]) !== "true") {
+        return;
+      }
+      try {
+        const endpoint = "/drop/session";
+        const headers = this.buildHeadersSync(this.usesBinary(endpoint) ? _GPUdb.AVRO_HEADERS : void 0);
+        if (this.userAgent) {
+          headers["User-Agent"] = this.userAgent;
+        }
+        const body = this.encodeRequest(endpoint, { options: {} });
+        this.sessionCleanup.arm({
+          method: "POST",
+          url: this.urls.getCurrentItem() + endpoint,
+          headers,
+          ...typeof body === "string" ? { body } : { bytes: body, responseType: "binary" },
+          timeout: SESSION_DROP_TIMEOUT
+        });
+        SESSION_CLEANER?.register(this, this.sessionCleanup, this);
+      } catch (err) {
+        console.warn(`Unable to prepare the drop of session <${this.sessionId}>: ${toError(err).message}`);
+      }
     }
     /**
      * Encodes data for transmission.
@@ -2899,6 +3056,12 @@ var __kinetica = (() => {
         ...this.customHeaders,
         ...extra ?? {}
       };
+      for (const name of Object.keys(headers)) {
+        if (name.toLowerCase() === SESSION_HEADER.toLowerCase()) {
+          delete headers[name];
+        }
+      }
+      headers[SESSION_HEADER] = this.sessionId;
       if (this.authorization) {
         headers["Authorization"] = this.authorization;
       }
@@ -2972,6 +3135,12 @@ var __kinetica = (() => {
      * open for the duration.
      */
     submitRequest(endpoint, request, wantsCallback = false) {
+      if (this.closed) {
+        if (this.blocks(endpoint, wantsCallback)) {
+          throw this.closedError();
+        }
+        return Promise.reject(this.closedError());
+      }
       if (this.blocks(endpoint, wantsCallback)) {
         return this.submitRequestSync(endpoint, request);
       }
@@ -3013,7 +3182,9 @@ var __kinetica = (() => {
           continue;
         }
         try {
-          return binary ? this.unwrapBinaryResponse(endpoint, response) : this.unwrapResponse(response.body, response.headers);
+          const payload = binary ? this.unwrapBinaryResponse(endpoint, response) : this.unwrapResponse(response.body, response.headers);
+          this.noteSessionUsed(payload);
+          return payload;
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           if (!_GPUdb.isFailoverMessage(message)) {
@@ -3063,7 +3234,9 @@ var __kinetica = (() => {
           continue;
         }
         try {
-          return binary ? this.unwrapBinaryResponse(endpoint, response) : this.unwrapResponse(response.body, response.headers);
+          const payload = binary ? this.unwrapBinaryResponse(endpoint, response) : this.unwrapResponse(response.body, response.headers);
+          this.noteSessionUsed(payload);
+          return payload;
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           if (!_GPUdb.isFailoverMessage(message)) {
@@ -3087,11 +3260,14 @@ var __kinetica = (() => {
       for (; ; ) {
         const job = await this.get_job(created.job_id, {});
         if (job.successful) {
+          let payload;
           try {
-            return JSON.parse(job.job_response_str);
+            payload = JSON.parse(job.job_response_str);
           } catch (err) {
             throw new Error(`Unable to parse response: ${err}`);
           }
+          this.noteSessionUsed(payload);
+          return payload;
         }
         if (!job.running) {
           if (job.job_status === "ERROR") {
@@ -3138,6 +3314,9 @@ var __kinetica = (() => {
           callback(err, null);
           throw err;
         }
+      }
+      if (this.closed) {
+        throw this.closedError();
       }
       const query = new URLSearchParams();
       for (const [key, value] of Object.entries(request ?? {})) {
@@ -14418,13 +14597,13 @@ var __kinetica = (() => {
       }
     }
   };
-  GPUdb.VERSION = "7.2.3.3";
+  GPUdb.VERSION = "7.2.3.4";
   GPUdb.END_OF_SET = END_OF_SET;
   GPUdb.encode = encode;
   GPUdb.decode = decode;
   GPUdb.decode_regular = decodeRegular;
   GPUdb.decode_no_inf_nan = decodeNoInfNan;
-  GPUdb.api_version = "7.2.3.3";
+  GPUdb.api_version = "7.2.3.4";
   GPUdb.Type = Type;
   GPUdb.RingList = RingList;
   GPUdb.HA_FAILOVER_ORDER = Object.freeze({

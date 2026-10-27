@@ -4,7 +4,7 @@
 <h5 align="center" style="margin:0px">
 	<a href="https://www.kinetica.com/">Website</a>
 	|
-	<a href="https://docs.kinetica.com/content/">Docs</a>
+	<a href="https://docs.kinetica.com/">Docs</a>
 	|
 	<a href="https://docs.kinetica.com/content/api/javascript/">JavaScript API Docs</a>
 	|
@@ -71,7 +71,7 @@ At a high level, the difference between them is:
     request and response.
 
 How to use the API is covered below. The Kinetica documentation can be found
-at https://docs.kinetica.com/7.2/.
+at https://docs.kinetica.com/.
 
 For changes to the client-side API, please refer to
 [CHANGELOG.md](CHANGELOG.md).  For
@@ -352,6 +352,7 @@ const db = new GPUdb('http://localhost:9191', {
     job_timeout: 600000,          // ms to poll a job-wrapped endpoint; 0 (default) = no deadline
     max_response_bytes: 67108864, // 0 (default) means no ceiling
     headers: { 'X-Trace-Id': 'abc123' },
+    session_id: 'shared-sql-session', // share SQL #temp tables; see Sessions
     transport: myTransport,       // see Custom transports
     client_name: 'my-app',        // prefixes the User-Agent (Node.js)
     client_version: '1.0.0',
@@ -362,8 +363,8 @@ const db = new GPUdb('http://localhost:9191', {
 ```
 
 Headers can also be managed after construction. `Accept`, `Authorization`,
-`Content-Type` and `X-Kinetica-Group` are protected and throw if you try to
-set or remove them:
+`Content-Type`, `X-Kinetica-Group` and `X-Kinetica-Session` are protected and
+throw if you try to set or remove them:
 
 ```javascript
 db.addHttpHeader('X-Trace-Id', 'abc123');
@@ -379,6 +380,36 @@ db.url;                           // the server currently at the head of the rin
 GPUdb.VERSION;                    // '7.2.3.3'
 GPUdb.api_version;                // same value, under the old name
 ```
+
+### Sessions
+
+Each client is a server session of its own, which the SQL `#name` temp
+tables it creates belong to alone. `close()` drops them, and the client
+cannot be used afterwards:
+
+```javascript
+const db = new GPUdb(url);
+await db.execute_sql('CREATE TABLE #scratch AS SELECT * FROM orders', 0, -9999, '', [], {});
+// ...
+await db.close();                 // drops #scratch; db.is_closed() is now true
+```
+
+A client that is never closed has its temp tables dropped when it is garbage
+collected, on a best-effort basis; failing that, the server reclaims them.
+Against a server without session support nothing is dropped.
+
+To share one session's temp tables among several clients, give each the same
+`session_id`. That session is the caller's to drop, with `drop_session()` on
+any client given it; neither `close()` nor collection drops it:
+
+```javascript
+const a = new GPUdb(url, { session_id: 'shared-sql-session' });
+const b = new GPUdb(url, { session_id: 'shared-sql-session' });
+// ...
+await a.drop_session();           // drops the session's temp tables, for both
+```
+
+A session ID may contain only letters, digits and `-`, as a UUID does.
 
 ### Identifying your application
 

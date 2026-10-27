@@ -2,8 +2,10 @@
 
 ## Version 7.2.3.23
 #### Added
+-   Added new ``resync_replicas`` choice to the ``repair_policy`` option of the ``/admin/repair/table`` request, and ``repaired_replicated_tables`` to the ``info`` map of its response
 -   Added ``/drop/session`` endpoint, which drops the session temp tables (``#name``) owned by the client session named by its ``X-Kinetica-Session`` HTTP header.
 -   Added new option ``sql_session_idle_timeout`` to ``/alter/system/properties`` request
+-   Added new option ``postgres_proxy_max_queued_connections`` to ``/alter/system/properties`` request
 -   Added new ``arrow`` encoding to ``/get/records/bycolumn``, ``/execute/sql``, ``/aggregate/groupby``, ``/aggregate/unique`` and ``/aggregate/unpivot`` requests, which returns the records as an Arrow IPC stream in ``binary_encoded_response``
 
 ## Version 7.2.3.22

@@ -1,6 +1,6 @@
 {
     "name": "@kinetica/gpudb",
-    "version": "7.2.3-3",
+    "version": "7.2.3-4",
     "description": "Kinetica NodeJS Client API (compatibility wrapper -- use @kinetica/gpudb-api)",
     "main": "GPUdb.js",
     "types": "index.d.ts",
@@ -23,7 +23,7 @@
         "url": "https://github.com/kineticadb/kinetica-api-typescript.git"
     },
     "dependencies": {
-        "@kinetica/gpudb-api": "7.2.3-3"
+        "@kinetica/gpudb-api": "7.2.3-4"
     },
     "engines": {
         "node": ">=16.0.0"

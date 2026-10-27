@@ -2,6 +2,18 @@
 
 ## Version 7.2
 
+### Version 7.2.3.4 - 2026-10-27
+
+#### Added
+-   Support for SQL session temp tables.
+
+#### Fixed
+-   Issue handling non-ASCII passwords.
+
+#### Notes
+-   Check `CHANGELOG-FUNCTIONS.md` for endpoint related changes.
+
+
 ### Version 7.2.3.3 - 2026-10-18
 
 Adds the TypeScript API, which builds the JavaScript and Node.js APIs from a
