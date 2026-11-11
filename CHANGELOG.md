@@ -2,6 +2,28 @@
 
 ## Version 7.2
 
+### Version 7.2.3.5 - 2026-11-11
+
+#### Added
+-   `submit_request(endpoint, request, callback?)`, to call any endpoint by
+    path with the same failover, job wrapping, callback, and synchronous-mode
+    behavior as the generated methods.
+-   `submit_job_request(endpoint, request, callback?)`, to run any endpoint
+    through `/create/job` and `/get/job` regardless of the `job_endpoints`
+    option. Replaces the JavaScript API's private `submit_job_request_async`.
+-   `submitRequest` noted as able to override and intercept any request.
+
+#### Changed
+-   Client fails over with additional recoverable server responses:
+    -   server is starting up
+    -   restricted to admin users
+    -   has a rank down
+    -   ended the response early
+
+#### Notes
+-   Check `CHANGELOG-FUNCTIONS.md` for endpoint related changes.
+
+
 ### Version 7.2.3.4 - 2026-10-27
 
 #### Added

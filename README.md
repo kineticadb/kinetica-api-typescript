@@ -22,26 +22,33 @@
 -  [JavaScript](#javascript)
 -  [Node.js](#nodejs)
 -  [TypeScript](#typescript)
--  [Requirements](#requirements)
--  [Installation](#installation)
--  [Quick start](#quick-start)
--  [Module loading](#module-loading)
--  [Connecting](#connecting)
--  [Calling endpoints](#calling-endpoints)
--  [Types and tables](#types-and-tables)
--  [Reading data](#reading-data)
--  [Helper methods](#helper-methods)
--  [KIFS files](#kifs-files)
--  [Map images (WMS)](#map-images-wms)
--  [Error handling](#error-handling)
--  [Failover](#failover)
--  [Custom transports](#custom-transports)
--  [Utilities](#utilities)
+-  [Getting started](#getting-started)
+    -  [Requirements](#requirements)
+    -  [Installation](#installation)
+    -  [Quick start](#quick-start)
+    -  [Module loading](#module-loading)
+    -  [Running the examples](#running-the-examples)
+-  [Configuring the client](#configuring-the-client)
+    -  [Connecting](#connecting)
+        -  [Sessions](#sessions)
+        -  [Binary (Avro) encoding](#binary-avro-encoding)
+        -  [Running long ALTERs as a job](#running-long-alters-as-a-job)
+    -  [Failover](#failover)
+    -  [Custom transports](#custom-transports)
+-  [Working with data](#working-with-data)
+    -  [Calling endpoints](#calling-endpoints)
+    -  [Types and tables](#types-and-tables)
+    -  [Reading data](#reading-data)
+    -  [Helper methods](#helper-methods)
+    -  [KIFS files](#kifs-files)
+    -  [Map images (WMS)](#map-images-wms)
+    -  [Utilities](#utilities)
+    -  [Error handling](#error-handling)
 -  [Migrating from @kinetica/gpudb](#migrating-from-kineticagpudb)
--  [Running the examples](#running-the-examples)
--  [Building](#building)
--  [Project layout](#project-layout)
--  [Known limitations](#known-limitations)
+-  [Reference](#reference)
+    -  [Known limitations](#known-limitations)
+    -  [Building](#building)
+    -  [Project layout](#project-layout)
 -  [Support](#support)
 -  [Contact Us](#contact-us)
  
@@ -137,12 +144,15 @@ The example *TypeScript* programs that demonstrate the API are here:
 See [Running the examples](#running-the-examples) for how to run them.
 
 
-## Requirements
+## Getting started
+
+### Requirements
 
 - Node.js >= 16 (18+ recommended: the browser transport uses `fetch`)
 - TypeScript >= 5 to build from source
 
-## Installation
+
+### Installation
 
 ```bash
 npm install @kinetica/gpudb-api
@@ -162,7 +172,7 @@ Existing `@kinetica/gpudb` users need no changes yet — see
 [Migrating](#migrating-from-kineticagpudb).
 
 
-### Which build does what
+#### Which build does what
 
 | | `dist/node` | `dist/browser` | `dist/standalone` |
 | --- | --- | --- | --- |
@@ -178,7 +188,8 @@ Existing `@kinetica/gpudb` users need no changes yet — see
 `@kinetica/gpudb` resolves to `dist/node` through the compatibility wrapper;
 see [Migrating](#migrating-from-kineticagpudb).
 
-## Quick start
+
+### Quick start
 
 ```javascript
 const { GPUdb, END_OF_SET } = require('@kinetica/gpudb-api');
@@ -195,9 +206,10 @@ const records = await db.get_records('my_table', 0, END_OF_SET, {});
 console.log(records.data);          // [{ id: 1, name: 'Alice' }, ...]
 ```
 
-## Module loading
 
-### CommonJS (Node.js)
+### Module loading
+
+#### CommonJS (Node.js)
 
 ```javascript
 const { GPUdb, Type, Column, END_OF_SET } = require('@kinetica/gpudb-api');
@@ -214,7 +226,7 @@ import resolves to the default export — the `GPUdb` class:
 import GPUdb from '@kinetica/gpudb-api';   // the class, as in the old package
 ```
 
-### ES modules (Node.js)
+#### ES modules (Node.js)
 
 The package declares an `exports` map, so `import` resolves to a real ES
 module entry — no `createRequire` shim, in a `.mjs` file or a package with
@@ -247,7 +259,7 @@ Because the `exports` map is an encapsulation boundary, deep imports such as
 name; `@kinetica/gpudb-api/package.json` remains reachable for tooling that
 reads it.
 
-### TypeScript
+#### TypeScript
 
 Types resolve automatically through the package's `types` entry. No
 `@types/...` package is needed.
@@ -265,7 +277,7 @@ const elapsed: number | undefined = sql.request_time_secs;
 
 Works with `"moduleResolution": "node"`, `"node16"`, or `"bundler"`.
 
-### Browser (bundler)
+#### Browser (bundler)
 
 `dist/browser` is ES module source intended for a bundler — webpack, vite,
 rollup, esbuild, or anything else that resolves extensionless imports. Import
@@ -291,7 +303,7 @@ build fails with `Could not resolve "http"`.
 In the browser, `createTransport()` selects `BrowserHttpTransport` (`fetch`)
 automatically, because `process` does not exist.
 
-### Browser (plain `<script>` tag)
+#### Browser (plain `<script>` tag)
 
 Use `dist/standalone/GPUdb.js`: a single file defining a global `GPUdb`, like
 the JavaScript API's `GPUdb.js`. It is in the
@@ -326,7 +338,57 @@ npx esbuild ./dist/browser/index.js --bundle --format=iife \
 This is exactly what `npm run build:tests:browser` produces for the in-browser
 test page.
 
-## Connecting
+
+### Running the examples
+
+Three, one per way of consuming the package. All default to
+`http://localhost:9191` with no credentials, and each creates and drops its
+own table.
+
+#### TypeScript
+
+`examples/nodejs-example.ts` walks through system properties, type and table
+creation, inserts, reads, SQL, filtering, aggregation and cleanup.
+
+```bash
+npx ts-node examples/nodejs-example.ts [url] [username] [password]
+
+# for example
+npx ts-node examples/nodejs-example.ts http://localhost:9191 admin secret
+```
+
+#### ES modules
+
+`examples/esm-example.mjs` covers the same ground in plain ESM JavaScript,
+plus top-level `await` and `for await` over `SqlIterator`:
+
+```bash
+npm run build                 # dist/esm is what the example imports
+node examples/esm-example.mjs http://localhost:9191 admin secret
+```
+
+It imports the built entry point so it runs from a checkout; in your own
+project the import is just the package name. It also asserts that the named
+and default imports are the same objects — the single-instance property the
+wrapper exists to preserve.
+
+#### TypeScript with ES modules
+
+`examples/esm-typescript-example.mts` is compiled rather than run, and shows
+typed ESM usage under `nodenext` — the resolution mode that needs
+per-condition declarations:
+
+```bash
+npm run build                 # the example imports dist/esm
+npx tsc --noEmit --strict --target ES2022 --lib ES2022,DOM --types node \
+    --module nodenext --moduleResolution nodenext \
+    examples/esm-typescript-example.mts
+```
+
+
+## Configuring the client
+
+### Connecting
 
 ```javascript
 // single server
@@ -381,7 +443,7 @@ GPUdb.VERSION;                    // '7.2.3.3'
 GPUdb.api_version;                // same value, under the old name
 ```
 
-### Sessions
+#### Sessions
 
 Each client is a server session of its own, which the SQL `#name` temp
 tables it creates belong to alone. `close()` drops them, and the client
@@ -411,7 +473,7 @@ await a.drop_session();           // drops the session's temp tables, for both
 
 A session ID may contain only letters, digits and `-`, as a UUID does.
 
-### Identifying your application
+#### Identifying your application
 
 Under Node.js the client sends a `User-Agent` naming the API, and
 `client_name` / `client_version` prefix it:
@@ -423,7 +485,7 @@ new GPUdb(url, { client_name: 'my-app', client_version: '1.0.0' });
 
 Browsers forbid setting `User-Agent`, so it is sent from Node.js only.
 
-### Cookies
+#### Cookies
 
 For session affinity behind a load balancer, supply a cookie jar. Also
 Node.js only — browsers manage cookies themselves and reject the header:
@@ -436,7 +498,7 @@ const db = new GPUdb(url, {
 });
 ```
 
-### Capping the response size
+#### Capping the response size
 
 One unbounded `execute_sql` can return more than the process has memory for,
 and what follows is an out-of-memory kill rather than an error you can catch.
@@ -471,7 +533,7 @@ honour `maxResponseBytes` on `HttpRequestOptions` itself, and in the
 standalone build's synchronous mode the browser has already buffered the whole
 body before the client sees it, so the limit is reported rather than enforced.
 
-### Binary (Avro) encoding
+#### Binary (Avro) encoding
 
 By default requests and responses travel as JSON. `encoding: 'binary'`
 switches to Avro, the encoding the Java and Python APIs use:
@@ -531,7 +593,7 @@ const bytes = type.encode({ id: 1, sensor: 'a', value: 21.5 });
 type.decode(bytes);
 ```
 
-#### The codec has no dependencies
+##### The codec has no dependencies
 
 The Avro codec (`src/avro.ts`) is part of this package and needs nothing
 else at runtime. [avsc](https://github.com/mtth/avsc), an independent Avro
@@ -539,7 +601,7 @@ implementation, is used only during development, to check that both codecs
 produce the same bytes. It is a `devDependency`, so npm does not install it
 for this package's users, and it is never built into `dist/`.
 
-### Running long ALTERs as a job
+#### Running long ALTERs as a job
 
 A slow `alter_table` can outlast the idle timeout of a proxy sitting in front
 of Kinetica. `job_endpoints` submits those calls through `/create/job` and
@@ -572,7 +634,7 @@ worth knowing: a failed ALTER arrives as `Error during job execution: …` rathe
 than the bare server message, and `request_time_secs` is not attached on the
 job path.
 
-### Bounding a job-wrapped endpoint
+#### Bounding a job-wrapped endpoint
 
 `timeout` bounds each poll, not the loop, so a job that never finishes is
 waited on indefinitely. `job_timeout` puts a deadline on the whole thing —
@@ -594,7 +656,108 @@ purpose: outlasting a per-request timeout is the reason to job-wrap an endpoint
 at all, so inheriting it would defeat the feature. Giving up does not cancel
 the job — the server keeps running it.
 
-## Calling endpoints
+
+### Failover
+
+When constructed with several URLs, the client keeps them in a ring and starts
+at a random index, spreading load across the cluster. A request that fails at
+the **transport** level is retried against the next URL until every URL has
+been tried; only then does it reject.
+
+Errors reported by the server itself do **not** trigger failover — a missing
+table is a real answer, not a reason to try another node.
+
+```javascript
+const db = new GPUdb([
+    'http://host-1:9191',
+    'http://host-2:9191',
+    'http://host-3:9191'
+], { username: 'admin', password: 'secret' });
+
+// transparently uses whichever host answers
+await db.show_system_properties({});
+```
+
+
+### Custom transports
+
+Supply a `transport` to route requests through a proxy, add instrumentation,
+or stub the network in tests:
+
+```typescript
+import {
+    GPUdb, HttpTransport, HttpRequestOptions, HttpResponse, NodeHttpTransport
+} from '@kinetica/gpudb-api';
+
+class LoggingTransport implements HttpTransport {
+    async request(options: HttpRequestOptions): Promise<HttpResponse> {
+        console.log(options.method, options.url);
+        const start = Date.now();
+        const response = await new NodeHttpTransport().request(options);
+        console.log(`  ${response.status} in ${Date.now() - start}ms`);
+        return response;
+    }
+}
+
+const db = new GPUdb('http://localhost:9191', { transport: new LoggingTransport() });
+```
+
+`BrowserHttpTransport` (fetch) and `NodeHttpTransport` (http/https) are both
+exported, so either can be forced regardless of environment — useful for
+exercising the fetch path under Node.
+
+A transport that delegates, like the one above, inherits everything the client
+puts on `HttpRequestOptions`. One that does its own I/O must send
+`options.bytes` when it is set. A client using binary encoding puts its Avro
+request body there instead of in `options.body`, and asks for
+`responseType: 'binary'`, expecting the reply in `bytes`. One that reads the network itself owns
+`options.maxResponseBytes`: nothing above it enforces the ceiling, so a
+transport that ignores the field silently drops the guard. Reject with
+`ResponseTooLargeError` when the body passes it — the client treats that type
+as fatal rather than failing over.
+
+#### Testing without a server
+
+A stub transport lets a suite drive the client end to end — decoding, auth
+headers, timeouts, failover, error shapes — with no Kinetica running. Return
+whatever the server would have sent:
+
+```typescript
+const calls: HttpRequestOptions[] = [];
+
+const stub: HttpTransport = {
+    async request(options) {
+        calls.push(options);
+        return {
+            status: 200, statusText: 'OK', headers: {},
+            body: JSON.stringify({
+                status: 'OK',
+                data_str: JSON.stringify({
+                    count_affected: 0, has_more_records: false, paging_table: '',
+                    response_schema_str: '', binary_encoded_response: '',
+                    total_number_of_records: 2, info: {},
+                    json_encoded_response: JSON.stringify({
+                        column_headers: ['id'], column_datatypes: ['int'], column_1: [1, 2],
+                    }),
+                }),
+            }),
+        };
+    },
+};
+
+const db = new GPUdb('http://stub:9191', { username: 'u', password: 'p', transport: stub });
+const response = await db.execute_sql_request({ statement: 'SELECT id FROM t' });
+
+response.data.column_1;                  // [1, 2]
+calls[0].headers['Authorization'];       // 'Basic dTpw'
+```
+
+For WMS, set `bytes` on the response instead of `body`.
+
+
+## Working with data
+
+### Calling endpoints
 
 Every endpoint has two forms.
 
@@ -659,7 +822,57 @@ show_types(type_id, label, options?, callback?)
 clear_table(table_name?, authorization?, options?, callback?)
 ```
 
-## Types and tables
+#### Calling an endpoint by path
+
+`submit_request` takes the endpoint path and a request object, for endpoints
+with no generated method — the host manager's, for instance — or when the
+request object is already in hand:
+
+```javascript
+const status = await db.submit_request('/show/system/status', { options: {} });
+```
+
+It behaves exactly like the generated methods: it fails over, it runs as a job
+when the endpoint is in `job_endpoints`, it takes an optional trailing
+callback, and in the standalone build it blocks and returns the response itself
+when no callback is given.
+
+`submit_job_request` runs any endpoint as a job — `/create/job`, then
+`/get/job` until it finishes — whether or not the endpoint is in
+`job_endpoints`. It is for long-running endpoints without a generated method,
+where holding one HTTP request open for the duration would outlast a proxy:
+
+```javascript
+const result = await db.submit_job_request('/admin/rebalance', { options: {} });
+```
+
+The response is the endpoint's own, unwrapped from the job. Jobs poll, so the
+call is always asynchronous, even in the standalone build, and `job_timeout`
+bounds it — see [Running long ALTERs as a job](#running-long-alters-as-a-job).
+
+#### Intercepting every request
+
+Every endpoint method, `submit_request` and `submit_job_request` route through
+one protected method, `submitRequest(endpoint, request, wantsCallback)`. A
+subclass that overrides it sees each request before it is sent and each
+response or error before the caller does, which is the supported way to add
+cross-cutting behaviour such as session-expiry handling or request rewriting:
+
+```javascript
+class TracedGPUdb extends GPUdb {
+    submitRequest(endpoint, request, wantsCallback) {
+        console.log(endpoint, request);
+        return super.submitRequest(endpoint, request, wantsCallback);
+    }
+}
+```
+
+The result is the response itself when the request ran on the blocking path
+and a promise otherwise, so an override that transforms the result must handle
+both. Its signature is kept stable across releases.
+
+
+### Types and tables
 
 ```javascript
 const { GPUdb, Type, Column } = require('@kinetica/gpudb-api');
@@ -694,12 +907,13 @@ fromTable.generateSchema();             // Avro record schema
 
 `Column` is also reachable as `Type.Column`, matching the JavaScript API.
 
-## Reading data
+
+### Reading data
 
 Responses that carry records decode into a `data` property, **but the shape
 depends on the endpoint**. Getting this wrong is the most common mistake.
 
-### Row-major — an array of records
+#### Row-major — an array of records
 
 `get_records` and `get_records_from_collection` decode `records_json` into an
 array of objects:
@@ -712,7 +926,7 @@ for (const record of response.data) {
 }
 ```
 
-### Column-major — a dynamic schema
+#### Column-major — a dynamic schema
 
 `execute_sql`, `aggregate_group_by`, `aggregate_unique`, `aggregate_unpivot`
 and `get_records_by_column` return a **single column-major object**, typed as
@@ -757,7 +971,7 @@ toRows(response.data);      // [{ category: 'A', n: 3 }, { category: 'B', n: 2 }
 
 `examples/nodejs-example.ts` contains a typed version of this helper.
 
-### Series — an array per track
+#### Series — an array per track
 
 `get_records_by_series` returns one array of records per series:
 
@@ -768,12 +982,13 @@ response.data.length;          // number of series
 response.data[0];              // [{ TRACKID: 'track_a', x: 1, y: 2 }, ...]
 ```
 
-## Helper methods
+
+### Helper methods
 
 Four hand-written conveniences beyond the generated endpoints, ported from the
 JavaScript API.
 
-### `SqlIterator` — page through a large result set
+#### `SqlIterator` — page through a large result set
 
 An async generator that fetches in batches, so a query larger than memory can
 be consumed a record at a time. Server-side paging tables are dropped when
@@ -790,7 +1005,7 @@ Records are yielded as objects keyed by column name. This differs from the
 JavaScript API, which yields positional arrays — use `Object.values(row)` if
 you need those.
 
-### `get_geo_json` — read a table as GeoJSON
+#### `get_geo_json` — read a table as GeoJSON
 
 ```javascript
 const geo = await db.get_geo_json('shapes', 0, 100, {});
@@ -801,7 +1016,7 @@ geo.features;          // [{ type: 'Feature', geometry: {...}, ... }, ...]
 Wraps `/get/records` with `encoding: 'geojson'` and unwraps the single encoded
 document the server returns.
 
-### `insert_records_from_json` — insert without declaring a type
+#### `insert_records_from_json` — insert without declaring a type
 
 Takes a record, an array of records, or a JSON string holding either. The table
 is created from the data if the options ask for it.
@@ -818,7 +1033,7 @@ await db.insert_records_from_json(
 await db.insert_records_from_json('[{"id":3,"name":"Charlie"}]', 'my_table', {}, {});
 ```
 
-### `get_records_json` — read records as JSON
+#### `get_records_json` — read records as JSON
 
 Only `table_name` is required; the rest narrow the query.
 
@@ -840,7 +1055,8 @@ response.has_more_records;          // false
 
 Without an `order_by`, record order is not guaranteed.
 
-## KIFS files
+
+### KIFS files
 
 `FileHandler` provides KIFS access. The JavaScript API ships two versions of it
 -- one for Node, one for the browser; here it is a single class carrying both
@@ -856,7 +1072,7 @@ const db = new GPUdb('http://localhost:9191', { username: 'admin', password: 'se
 const files = new FileHandler(db);          // also GPUdb.FileHandler, as in the JS API
 ```
 
-### Upload
+#### Upload
 
 ```javascript
 // local paths (Node.js)
@@ -890,7 +1106,7 @@ unchanged:
 files.chunkSize = 16 * 1024 * 1024;
 ```
 
-### Chunked upload, with progress
+#### Chunked upload, with progress
 
 `upload` reaches for this on its own past `chunkSize`; call it directly to
 chunk a file regardless of size, or to choose a chunk size for one upload.
@@ -908,7 +1124,7 @@ const uuid = await files.upload_multipart(
 );
 ```
 
-### Download
+#### Download
 
 ```javascript
 // base64-encoded contents, in request order
@@ -924,7 +1140,7 @@ const written = await files.download_and_save(
 Calling `download_and_save` from a browser build throws an explanatory error
 rather than failing obscurely.
 
-### Path helpers
+#### Path helpers
 
 ```javascript
 files.parse_dir_destination('dir');            // '/dir/'  -- adds both slashes
@@ -934,7 +1150,8 @@ files.parse_options({ custom: 'x' }, 'upload'); // { custom: 'x', file_encoding:
 
 `parse_options` keeps the options you pass. The JavaScript API discards them.
 
-## Map images (WMS)
+
+### Map images (WMS)
 
 `wms_request` returns the raw image bytes rather than JSON, failing over
 across URLs like any other call. The server's reported render time is attached
@@ -959,7 +1176,7 @@ img.src = URL.createObjectURL(new Blob([image], { type: 'image/png' }));  // bro
 
 The layer needs renderable geometry — x/y columns or a `GEOMETRY` column.
 
-### The return is typed `Uint8Array`, and is a `Buffer` under Node
+#### The return is typed `Uint8Array`, and is a `Buffer` under Node
 
 The declared type is `Uint8Array`, so that one source tree serves the browser
 too. Under Node the value you actually get is a `Buffer` — a `Uint8Array`
@@ -983,7 +1200,7 @@ decode explicitly:
 const text = new TextDecoder().decode(await db.wms_request(params));
 ```
 
-### WMS errors arrive in the body
+#### WMS errors arrive in the body
 
 Kinetica reports a bad GetMap with an XML `ServiceExceptionReport`, the same
 way the JSON endpoints report errors through the response envelope. Which
@@ -1007,7 +1224,7 @@ if (text.startsWith('<?xml')) {
 }
 ```
 
-### Infinity and NaN
+#### Infinity and NaN
 
 Kinetica returns those values as the quoted strings `"Infinity"`, `"-Infinity"`
 and `"NaN"`, so a `double` column holding one decodes to a JavaScript string
@@ -1030,127 +1247,8 @@ db.force_infinity_nan_conversion_to_null = false;   // settable after constructi
 
 This matches the JavaScript API's property of the same name.
 
-## Error handling
 
-Kinetica reports its own errors inside a response envelope, which the client
-unwraps. A failed call rejects with the **server's message**:
-
-```javascript
-try {
-    await db.get_records('no_such_table', 0, 10, {});
-} catch (err) {
-    console.error(err.message);
-    // Table does not exist: ki_home.no_such_table (TM/SMc:7588)
-}
-```
-
-Transport failures — connection refused, timeouts, unexpected HTTP status —
-reject too, but the wording is platform-specific. Node's transport passes the
-socket error through (`ECONNREFUSED`), while `fetch` rejects with
-`TypeError: fetch failed` (`Failed to fetch` in browsers) and puts the cause in
-`err.cause`. Match on both if you need to tell them apart:
-
-```javascript
-const TRANSPORT_ERROR = /ECONNREFUSED|Request failed|timeout|fetch failed|Failed to fetch/i;
-```
-
-## Failover
-
-When constructed with several URLs, the client keeps them in a ring and starts
-at a random index, spreading load across the cluster. A request that fails at
-the **transport** level is retried against the next URL until every URL has
-been tried; only then does it reject.
-
-Errors reported by the server itself do **not** trigger failover — a missing
-table is a real answer, not a reason to try another node.
-
-```javascript
-const db = new GPUdb([
-    'http://host-1:9191',
-    'http://host-2:9191',
-    'http://host-3:9191'
-], { username: 'admin', password: 'secret' });
-
-// transparently uses whichever host answers
-await db.show_system_properties({});
-```
-
-## Custom transports
-
-Supply a `transport` to route requests through a proxy, add instrumentation,
-or stub the network in tests:
-
-```typescript
-import {
-    GPUdb, HttpTransport, HttpRequestOptions, HttpResponse, NodeHttpTransport
-} from '@kinetica/gpudb-api';
-
-class LoggingTransport implements HttpTransport {
-    async request(options: HttpRequestOptions): Promise<HttpResponse> {
-        console.log(options.method, options.url);
-        const start = Date.now();
-        const response = await new NodeHttpTransport().request(options);
-        console.log(`  ${response.status} in ${Date.now() - start}ms`);
-        return response;
-    }
-}
-
-const db = new GPUdb('http://localhost:9191', { transport: new LoggingTransport() });
-```
-
-`BrowserHttpTransport` (fetch) and `NodeHttpTransport` (http/https) are both
-exported, so either can be forced regardless of environment — useful for
-exercising the fetch path under Node.
-
-A transport that delegates, like the one above, inherits everything the client
-puts on `HttpRequestOptions`. One that does its own I/O must send
-`options.bytes` when it is set. A client using binary encoding puts its Avro
-request body there instead of in `options.body`, and asks for
-`responseType: 'binary'`, expecting the reply in `bytes`. One that reads the network itself owns
-`options.maxResponseBytes`: nothing above it enforces the ceiling, so a
-transport that ignores the field silently drops the guard. Reject with
-`ResponseTooLargeError` when the body passes it — the client treats that type
-as fatal rather than failing over.
-
-### Testing without a server
-
-A stub transport lets a suite drive the client end to end — decoding, auth
-headers, timeouts, failover, error shapes — with no Kinetica running. Return
-whatever the server would have sent:
-
-```typescript
-const calls: HttpRequestOptions[] = [];
-
-const stub: HttpTransport = {
-    async request(options) {
-        calls.push(options);
-        return {
-            status: 200, statusText: 'OK', headers: {},
-            body: JSON.stringify({
-                status: 'OK',
-                data_str: JSON.stringify({
-                    count_affected: 0, has_more_records: false, paging_table: '',
-                    response_schema_str: '', binary_encoded_response: '',
-                    total_number_of_records: 2, info: {},
-                    json_encoded_response: JSON.stringify({
-                        column_headers: ['id'], column_datatypes: ['int'], column_1: [1, 2],
-                    }),
-                }),
-            }),
-        };
-    },
-};
-
-const db = new GPUdb('http://stub:9191', { username: 'u', password: 'p', transport: stub });
-const response = await db.execute_sql_request({ statement: 'SELECT id FROM t' });
-
-response.data.column_1;                  // [1, 2]
-calls[0].headers['Authorization'];       // 'Basic dTpw'
-```
-
-For WMS, set `bytes` on the response instead of `body`.
-
-## Utilities
+### Utilities
 
 ```javascript
 const {
@@ -1174,6 +1272,32 @@ ring.getCurrentItem();             // 'a'
 ring.next();                       // 'b'
 ring.size();                       // 3
 ```
+
+
+### Error handling
+
+Kinetica reports its own errors inside a response envelope, which the client
+unwraps. A failed call rejects with the **server's message**:
+
+```javascript
+try {
+    await db.get_records('no_such_table', 0, 10, {});
+} catch (err) {
+    console.error(err.message);
+    // Table does not exist: ki_home.no_such_table (TM/SMc:7588)
+}
+```
+
+Transport failures — connection refused, timeouts, unexpected HTTP status —
+reject too, but the wording is platform-specific. Node's transport passes the
+socket error through (`ECONNREFUSED`), while `fetch` rejects with
+`TypeError: fetch failed` (`Failed to fetch` in browsers) and puts the cause in
+`err.cause`. Match on both if you need to tell them apart:
+
+```javascript
+const TRANSPORT_ERROR = /ECONNREFUSED|Request failed|timeout|fetch failed|Failed to fetch/i;
+```
+
 
 ## Migrating from @kinetica/gpudb
 
@@ -1266,6 +1390,30 @@ declaration over the types this package ships — **with no error and no
 warning** — so the project keeps compiling against stale hand-written types
 indefinitely. Delete the shim as part of the upgrade.
 
+### Raw endpoint calls
+
+`submit_request(endpoint, request, callback?)` is carried over unchanged. The
+JavaScript API's private `submit_job_request_async(endpoint, requestString,
+callback)` is replaced by the public
+[`submit_job_request`](#calling-an-endpoint-by-path), which takes a request
+object (a JSON string is still accepted) and returns a promise as well as
+invoking the callback. Code that patched the client's prototype methods to
+intercept requests should override `submitRequest` instead — see
+[Intercepting every request](#intercepting-every-request). The methods of the
+standalone build are ES class methods, so they are not enumerable and a
+`for..in` walk no longer finds them.
+
+### URLs must be absolute
+
+The constructor accepts only absolute `http://` or `https://` URLs and throws
+`Invalid URL specified` for anything else, as the Node.js build of the old API
+did. The old browser build did not check, so a page that passed a relative
+proxy path such as `'proxy'` or `'/gaia_server'` must now resolve it first:
+
+```javascript
+const db = new GPUdb(new URL('/gaia_server', window.location.href).href);
+```
+
 ### One behaviour change to check for
 
 `wms_request` is now typed `Uint8Array` where the old API's type was a Node
@@ -1273,53 +1421,23 @@ indefinitely. Delete the shim as part of the upgrade.
 still a `Buffer`, so existing code keeps working; TypeScript callers that
 declared the result as `Buffer` need the type widened, or a cast.
 
-## Running the examples
 
-Three, one per way of consuming the package. All default to
-`http://localhost:9191` with no credentials, and each creates and drops its
-own table.
+## Reference
 
-### TypeScript
+### Known limitations
 
-`examples/nodejs-example.ts` walks through system properties, type and table
-creation, inserts, reads, SQL, filtering, aggregation and cleanup.
+- **`dist/browser` requires a bundler.** It is emitted with
+  `"moduleResolution": "bundler"`, so its relative imports have no `.js`
+  extension and no browser or Node ESM loader can resolve them directly. Bundle
+  it, or use the IIFE recipe above.
+- **Binary encoding leaves some record data as JSON.** Under
+  `encoding: 'binary'`, `get_records_by_series` and
+  `get_records_from_collection` still return their records as JSON, and
+  `JSON_ONLY_ENDPOINTS` go entirely as JSON. Snappy compression is not
+  supported.
 
-```bash
-npx ts-node examples/nodejs-example.ts [url] [username] [password]
 
-# for example
-npx ts-node examples/nodejs-example.ts http://localhost:9191 admin secret
-```
-
-### ES modules
-
-`examples/esm-example.mjs` covers the same ground in plain ESM JavaScript,
-plus top-level `await` and `for await` over `SqlIterator`:
-
-```bash
-npm run build                 # dist/esm is what the example imports
-node examples/esm-example.mjs http://localhost:9191 admin secret
-```
-
-It imports the built entry point so it runs from a checkout; in your own
-project the import is just the package name. It also asserts that the named
-and default imports are the same objects — the single-instance property the
-wrapper exists to preserve.
-
-### TypeScript with ES modules
-
-`examples/esm-typescript-example.mts` is compiled rather than run, and shows
-typed ESM usage under `nodenext` — the resolution mode that needs
-per-condition declarations:
-
-```bash
-npm run build                 # the example imports dist/esm
-npx tsc --noEmit --strict --target ES2022 --lib ES2022,DOM --types node \
-    --module nodenext --moduleResolution nodenext \
-    examples/esm-typescript-example.mts
-```
-
-## Building
+### Building
 
 `dist/` already holds the built API. To rebuild it from `src/`:
 
@@ -1333,7 +1451,8 @@ npm run build:standalone # dist/standalone/GPUdb.js (script tag, global GPUdb)
 npm run clean            # remove dist/
 ```
 
-## Project layout
+
+### Project layout
 
 ```
 src/                    the client's TypeScript source; (gen) = generated
@@ -1363,18 +1482,6 @@ compat/                 the @kinetica/gpudb wrapper package, published
                         working
 scripts/                build helpers (copy-esm.js)
 ```
-
-## Known limitations
-
-- **`dist/browser` requires a bundler.** It is emitted with
-  `"moduleResolution": "bundler"`, so its relative imports have no `.js`
-  extension and no browser or Node ESM loader can resolve them directly. Bundle
-  it, or use the IIFE recipe above.
-- **Binary encoding leaves some record data as JSON.** Under
-  `encoding: 'binary'`, `get_records_by_series` and
-  `get_records_from_collection` still return their records as JSON, and
-  `JSON_ONLY_ENDPOINTS` go entirely as JSON. Snappy compression is not
-  supported.
 
 
 ## Support

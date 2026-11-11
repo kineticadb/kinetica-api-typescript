@@ -3130,9 +3130,22 @@ var __kinetica = (() => {
      * been tried. Errors reported by the server itself are returned to the
      * caller immediately, without failing over.
      *
-     * Endpoints that can run long -- /alter/table and /alter/table/columns --
-     * are submitted as jobs instead, so the HTTP request does not have to stay
-     * open for the duration.
+     * Endpoints listed in the `job_endpoints` option are submitted as jobs
+     * instead, so the HTTP request does not have to stay open for the
+     * duration.
+     *
+     * This is the one method every endpoint method, `submit_request` and
+     * `submit_job_request` route through, and the supported place to
+     * intercept requests: a subclass that overrides it sees every endpoint
+     * and request object before it is sent, and every response or error
+     * before the caller does. The signature is kept stable for that reason.
+     * The result is the payload itself when the request ran on the blocking
+     * path and a promise otherwise, so an override must handle both.
+     *
+     * @param endpoint - The endpoint path, such as `/show/table`
+     * @param request - The request object, matching the endpoint's schema
+     * @param wantsCallback - Whether the caller passed a callback, which keeps
+     *     the call off the blocking path
      */
     submitRequest(endpoint, request, wantsCallback = false) {
       if (this.closed) {
@@ -3283,6 +3296,59 @@ var __kinetica = (() => {
         }
         await new Promise((resolve) => setTimeout(resolve, _GPUdb.JOB_POLL_INTERVAL));
       }
+    }
+    /**
+     * Submits a request to any endpoint by path.
+     *
+     * For endpoints without a generated method, such as those of the host
+     * manager, and for callers that already hold a request object. The call
+     * behaves exactly like the generated methods: it fails over, it is
+     * job-wrapped when the endpoint is in `job_endpoints`, it returns a
+     * promise and invokes the optional callback, and in the standalone build
+     * it blocks and returns the response itself when no callback is given.
+     *
+     * @param endpoint - The endpoint path, such as `/show/table`
+     * @param request - The request object, matching the endpoint's schema
+     * @param callback - Optional callback function
+     * @returns Promise resolving to the endpoint's response
+     *
+     * @example
+     * ```typescript
+     * const status = await db.submit_request('/show/system/status', { options: {} });
+     * ```
+     */
+    submit_request(endpoint, request, callback) {
+      const dispatched = this.submitRequest(endpoint, request ?? {}, callback !== void 0);
+      this.notify(dispatched, callback);
+      return dispatched;
+    }
+    /**
+     * Submits a request to any endpoint as a job: `/create/job`, then
+     * `/get/job` until it finishes, whether or not the endpoint is in
+     * `job_endpoints`.
+     *
+     * For long-running endpoints without a generated method, such as
+     * `/rebuild_db` or `/admin/rebalance`, where holding one HTTP request open
+     * for the duration would outlast a proxy. The response is the endpoint's
+     * own, unwrapped from the job. Jobs poll, so the call is always
+     * asynchronous, even in the standalone build; `job_timeout` bounds it.
+     *
+     * @param endpoint - The endpoint path, such as `/rebuild_db`
+     * @param request - The request object, matching the endpoint's schema;
+     *     a JSON string is accepted too, as the JavaScript API took one
+     * @param callback - Optional callback function
+     * @returns Promise resolving to the endpoint's response
+     *
+     * @example
+     * ```typescript
+     * const result = await db.submit_job_request('/admin/rebalance', { options: {} });
+     * ```
+     */
+    submit_job_request(endpoint, request, callback) {
+      const body = typeof request === "string" ? JSON.parse(request) : request ?? {};
+      const dispatched = this.submitJobRequest(endpoint, body);
+      this.notify(dispatched, callback);
+      return dispatched;
     }
     /**
      * Requests a map image from the WMS endpoint.
@@ -4700,7 +4766,8 @@ var __kinetica = (() => {
      *
      * A second, comma-separated value can be added to the percentile statistic
      * to calculate percentile resolution, e.g., a 50th percentile with 200
-     * resolution would be 'percentile(50,200)'.
+     * resolution would be 'percentile(50,200)'. The allowable range of the
+     * percentile resolution is 10 to 10000, with a default value of 100.
      *
      * The weighted average statistic requires a weight column to be specified
      * in weight_column_name.  The weighted average is then defined as the sum
@@ -4754,7 +4821,8 @@ var __kinetica = (() => {
      *
      * A second, comma-separated value can be added to the percentile statistic
      * to calculate percentile resolution, e.g., a 50th percentile with 200
-     * resolution would be 'percentile(50,200)'.
+     * resolution would be 'percentile(50,200)'. The allowable range of the
+     * percentile resolution is 10 to 10000, with a default value of 100.
      *
      * The weighted average statistic requires a weight column to be specified
      * in weight_column_name.  The weighted average is then defined as the sum
@@ -14597,13 +14665,13 @@ var __kinetica = (() => {
       }
     }
   };
-  GPUdb.VERSION = "7.2.3.4";
+  GPUdb.VERSION = "7.2.3.5";
   GPUdb.END_OF_SET = END_OF_SET;
   GPUdb.encode = encode;
   GPUdb.decode = decode;
   GPUdb.decode_regular = decodeRegular;
   GPUdb.decode_no_inf_nan = decodeNoInfNan;
-  GPUdb.api_version = "7.2.3.4";
+  GPUdb.api_version = "7.2.3.5";
   GPUdb.Type = Type;
   GPUdb.RingList = RingList;
   GPUdb.HA_FAILOVER_ORDER = Object.freeze({
@@ -14622,7 +14690,11 @@ var __kinetica = (() => {
     "Connection reset",
     "system-limited-fatal",
     "Kinetica is offline",
-    "Query planner is not running"
+    "Query planner is not running",
+    "Kinetica is starting up",
+    "Kinetica is currently unable to process this message",
+    "Kinetica is restricted to admin users only",
+    "Unexpected end of file from server"
   ]);
   GPUdb.DEFAULT_JOB_ENDPOINTS = ["/alter/table", "/alter/table/columns"];
   GPUdb.JOB_POLL_INTERVAL = 5e3;
