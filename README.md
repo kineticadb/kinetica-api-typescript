@@ -294,14 +294,23 @@ const props = await db.show_system_properties({});
 ```
 
 The `browser` field in `package.json` does two jobs: it redirects the Node
-entry to `dist/browser`, and it maps `http`, `https`, `url`, `fs` and `path` to
-`false`. Those Node built-ins are imported by `NodeHttpTransport` and by
-`FileHandler`'s filesystem methods, neither of which is reachable in a browser
-— but bundlers resolve the imports statically, so without those entries the
-build fails with `Could not resolve "http"`.
+entry to `dist/browser`, and it swaps one module, `nodeBuiltins`, for a stub
+whose exports are all `undefined`. That module is the only place the API
+imports Node built-ins (`http`, `https`, `url`, `fs`, `path`, `os`, `crypto`),
+and only `NodeHttpTransport`, `FileHandler`'s filesystem methods and the
+User-Agent builder use them, none of which runs in a browser. A bundler
+therefore never sees an import of a Node built-in, needs no stubs or fallbacks
+for them, and emits no extra chunks.
 
 In the browser, `createTransport()` selects `BrowserHttpTransport` (`fetch`)
 automatically, because `process` does not exist.
+
+**Do not re-transpile `dist/browser`.** It is ES2020 and uses `bigint`, which
+has no down-level form: a Babel pipeline that runs `preset-env` over it
+rewrites `2n ** 63n` into `Math.pow`, which throws at module load, and other
+ES2020 syntax fares no better. Exclude the package from `babel-loader` (or
+whichever transform the bundler runs on dependencies) and ship it as it is.
+Every browser that has `fetch` also has ES2020.
 
 #### Browser (plain `<script>` tag)
 
@@ -1461,6 +1470,8 @@ src/                    the client's TypeScript source; (gen) = generated
   types.ts        (gen) request/response interfaces, DynamicSchemaData
   schemas.ts      (gen) Avro schema of every endpoint's request and response
   transport.ts          HttpTransport, browser (fetch) and Node implementations
+  nodeBuiltins.ts       the Node built-ins, in one module a browser build swaps
+  nodeBuiltins.browser.ts   ...for this stub, through package.json's "browser" field
   utils.ts              Type, Column, RingList, encode/decode, base64
   avro.ts               AvroType and AvroError
   index.ts              the public exports (the package entry point)

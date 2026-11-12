@@ -1,18 +1,13 @@
 {
     "name": "@kinetica/gpudb-api",
-    "version": "7.2.3-5",
+    "version": "7.2.3-6",
     "description": "Kinetica Database JavaScript/TypeScript API",
     "main": "dist/node/index.js",
     "module": "dist/esm/index.mjs",
     "browser": {
         "./dist/node/index.js": "./dist/browser/index.js",
-        "http": false,
-        "https": false,
-        "url": false,
-        "fs": false,
-        "path": false,
-        "os": false,
-        "crypto": false
+        "./dist/browser/nodeBuiltins": "./dist/browser/nodeBuiltins.browser.js",
+        "./dist/browser/nodeBuiltins.js": "./dist/browser/nodeBuiltins.browser.js"
     },
     "types": "dist/types/index.d.ts",
     "exports": {

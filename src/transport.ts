@@ -1,3 +1,5 @@
+import { http, https, url } from './nodeBuiltins';
+
 /**
  * HTTP Transport abstraction for cross-platform support.
  */
@@ -313,13 +315,9 @@ export class BrowserHttpTransport implements HttpTransport {
  */
 export class NodeHttpTransport implements HttpTransport {
     async request(options: HttpRequestOptions): Promise<HttpResponse> {
-        // Dynamic import for Node.js modules
-        const url = await import('url');
         const parsedUrl = new url.URL(options.url);
         const isHttps = parsedUrl.protocol === 'https:';
-        const httpModule = isHttps
-            ? await import('https')
-            : await import('http');
+        const httpModule = isHttps ? https : http;
 
         return new Promise((resolve, reject) => {
             const requestOptions = {

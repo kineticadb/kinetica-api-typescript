@@ -1,6 +1,4 @@
-/**
- * HTTP Transport abstraction for cross-platform support.
- */
+import { http, https, url } from './nodeBuiltins';
 /**
  * Thrown when a response passes the `max_response_bytes` ceiling.
  *
@@ -228,13 +226,9 @@ export class BrowserHttpTransport {
  */
 export class NodeHttpTransport {
     async request(options) {
-        // Dynamic import for Node.js modules
-        const url = await import('url');
         const parsedUrl = new url.URL(options.url);
         const isHttps = parsedUrl.protocol === 'https:';
-        const httpModule = isHttps
-            ? await import('https')
-            : await import('http');
+        const httpModule = isHttps ? https : http;
         return new Promise((resolve, reject) => {
             const requestOptions = {
                 hostname: parsedUrl.hostname,

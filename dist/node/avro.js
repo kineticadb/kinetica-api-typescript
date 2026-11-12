@@ -51,8 +51,11 @@ const textDecoder = new TextDecoder('utf-8', { fatal: true });
 const FAST_LONG_LIMIT = 2 ** 52;
 const MIN_SAFE_BIG = BigInt(Number.MIN_SAFE_INTEGER);
 const MAX_SAFE_BIG = BigInt(Number.MAX_SAFE_INTEGER);
-const MIN_LONG = -(2n ** 63n);
-const MAX_LONG = 2n ** 63n - 1n;
+// Written as literals, not 2n ** 63n: a consumer that re-transpiles this
+// file with Babel's exponentiation transform turns `**` into Math.pow, which
+// throws on BigInt at module load and takes the whole bundle down with it
+const MIN_LONG = BigInt('-9223372036854775808');
+const MAX_LONG = BigInt('9223372036854775807');
 const MIN_INT = -(2 ** 31);
 const MAX_INT = 2 ** 31 - 1;
 class Writer {

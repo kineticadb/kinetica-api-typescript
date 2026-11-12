@@ -1,25 +1,10 @@
 "use strict";
 var __kinetica = (() => {
-  var __create = Object.create;
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __getOwnPropNames = Object.getOwnPropertyNames;
-  var __getProtoOf = Object.getPrototypeOf;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
   var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
-  var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
-    get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
-  }) : x)(function(x) {
-    if (typeof require !== "undefined") return require.apply(this, arguments);
-    throw Error('Dynamic require of "' + x + '" is not supported');
-  });
-  var __commonJS = (cb, mod) => function __require2() {
-    try {
-      return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
-    } catch (e) {
-      throw mod = 0, e;
-    }
-  };
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
@@ -32,57 +17,7 @@ var __kinetica = (() => {
     }
     return to;
   };
-  var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-    // If the importer is in node compatibility mode or this is not an ESM
-    // file that has been converted to a CommonJS file using a Babel-
-    // compatible transform (i.e. "__esModule" has not been set), then set
-    // "default" to the CommonJS "module.exports" for node compatibility.
-    isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-    mod
-  ));
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-
-  // (disabled):url
-  var require_url = __commonJS({
-    "(disabled):url"() {
-    }
-  });
-
-  // (disabled):https
-  var require_https = __commonJS({
-    "(disabled):https"() {
-    }
-  });
-
-  // (disabled):http
-  var require_http = __commonJS({
-    "(disabled):http"() {
-    }
-  });
-
-  // (disabled):crypto
-  var require_crypto = __commonJS({
-    "(disabled):crypto"() {
-    }
-  });
-
-  // (disabled):os
-  var require_os = __commonJS({
-    "(disabled):os"() {
-    }
-  });
-
-  // (disabled):path
-  var require_path = __commonJS({
-    "(disabled):path"() {
-    }
-  });
-
-  // (disabled):fs
-  var require_fs = __commonJS({
-    "(disabled):fs"() {
-    }
-  });
 
   // dist/browser/standalone.js
   var standalone_exports = {};
@@ -107,6 +42,15 @@ var __kinetica = (() => {
     decodeRegular: () => decodeRegular,
     encode: () => encode
   });
+
+  // dist/browser/nodeBuiltins.browser.js
+  var http = void 0;
+  var https = void 0;
+  var url = void 0;
+  var fs = void 0;
+  var path = void 0;
+  var os = void 0;
+  var crypto = void 0;
 
   // dist/browser/transport.js
   var ResponseTooLargeError = class extends Error {
@@ -300,10 +244,9 @@ var __kinetica = (() => {
       __name(this, "NodeHttpTransport");
     }
     async request(options) {
-      const url = await Promise.resolve().then(() => __toESM(require_url()));
       const parsedUrl = new url.URL(options.url);
       const isHttps = parsedUrl.protocol === "https:";
-      const httpModule = isHttps ? await Promise.resolve().then(() => __toESM(require_https())) : await Promise.resolve().then(() => __toESM(require_http()));
+      const httpModule = isHttps ? https : http;
       return new Promise((resolve, reject) => {
         const requestOptions = {
           hostname: parsedUrl.hostname,
@@ -604,8 +547,8 @@ var __kinetica = (() => {
   var FAST_LONG_LIMIT = 2 ** 52;
   var MIN_SAFE_BIG = BigInt(Number.MIN_SAFE_INTEGER);
   var MAX_SAFE_BIG = BigInt(Number.MAX_SAFE_INTEGER);
-  var MIN_LONG = -(2n ** 63n);
-  var MAX_LONG = 2n ** 63n - 1n;
+  var MIN_LONG = BigInt("-9223372036854775808");
+  var MAX_LONG = BigInt("9223372036854775807");
   var MIN_INT = -(2 ** 31);
   var MAX_INT = 2 ** 31 - 1;
   var Writer = class {
@@ -2355,9 +2298,8 @@ var __kinetica = (() => {
       const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
       return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
     }
-    const nodeCrypto = typeof __require === "function" ? require_crypto() : void 0;
-    if (typeof nodeCrypto?.randomUUID === "function") {
-      return nodeCrypto.randomUUID();
+    if (typeof crypto?.randomUUID === "function") {
+      return crypto.randomUUID();
     }
     throw new Error("No secure random number source (Web Crypto) to name a session with; set the session_id option");
   }
@@ -2479,7 +2421,7 @@ var __kinetica = (() => {
      * @param url - URL or array of URLs for the Kinetica server(s)
      * @param options - Configuration options
      */
-    constructor(url, options = {}) {
+    constructor(url2, options = {}) {
       this.tableTypes = /* @__PURE__ */ new Map();
       this.protectedHeaders = [
         "Accept",
@@ -2489,7 +2431,7 @@ var __kinetica = (() => {
         SESSION_HEADER
       ];
       this.closed = false;
-      const urls = (Array.isArray(url) ? url : [url]).map((one) => one.replace(/\/+$/, ""));
+      const urls = (Array.isArray(url2) ? url2 : [url2]).map((one) => one.replace(/\/+$/, ""));
       for (const one of urls) {
         const protocol = _GPUdb.parseServerUrl(one).protocol;
         if (protocol !== "http:" && protocol !== "https:") {
@@ -2568,8 +2510,8 @@ var __kinetica = (() => {
      * is the default (`http://host:80` gives `"80"`, which WHATWG URL would
      * normalise away), IPv6 brackets removed, and no query or fragment.
      */
-    static parseServerUrl(url) {
-      const match = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)/i.exec(url);
+    static parseServerUrl(url2) {
+      const match = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)/i.exec(url2);
       if (!match) {
         return { protocol: "", hostname: "", port: null, pathname: "" };
       }
@@ -3029,7 +2971,6 @@ var __kinetica = (() => {
       }
       let release = "";
       try {
-        const os = await Promise.resolve().then(() => __toESM(require_os()));
         release = os.release();
       } catch {
       }
@@ -3167,12 +3108,12 @@ var __kinetica = (() => {
       const initialUrl = this.urls.getCurrentItem();
       let lastError = new Error("Request failed");
       do {
-        const url = this.urls.getCurrentItem();
+        const url2 = this.urls.getCurrentItem();
         let response;
         try {
           response = this.transport.requestSync({
             method: "POST",
-            url: url + endpoint,
+            url: url2 + endpoint,
             headers,
             ...typeof body === "string" ? { body } : { bytes: body, responseType: "binary" },
             timeout: this.timeout,
@@ -3219,12 +3160,12 @@ var __kinetica = (() => {
       const initialUrl = this.urls.getCurrentItem();
       let lastError = new Error("Request failed");
       do {
-        const url = this.urls.getCurrentItem();
+        const url2 = this.urls.getCurrentItem();
         let response;
         try {
           response = await this.transport.request({
             method: "POST",
-            url: url + endpoint,
+            url: url2 + endpoint,
             headers,
             ...typeof body === "string" ? { body } : { bytes: body, responseType: "binary" },
             timeout: this.timeout,
@@ -3392,12 +3333,12 @@ var __kinetica = (() => {
       const initialUrl = this.urls.getCurrentItem();
       let lastError = new Error("Request failed");
       do {
-        const url = this.urls.getCurrentItem();
+        const url2 = this.urls.getCurrentItem();
         let response;
         try {
           response = await this.transport.request({
             method: "GET",
-            url: `${url}/wms?${query.toString()}`,
+            url: `${url2}/wms?${query.toString()}`,
             headers,
             timeout: this.timeout,
             maxResponseBytes: this.maxResponseBytes,
@@ -5980,9 +5921,9 @@ var __kinetica = (() => {
      * @param callback Optional callback function
      * @returns Promise<Types.AlterVideoResponse> - Promise resolving to the response
      */
-    alter_video(path, options, callback) {
+    alter_video(path2, options, callback) {
       const actualRequest = {
-        path,
+        path: path2,
         options: options ?? {}
       };
       const dispatched = this.submitRequest("/alter/video", actualRequest, callback !== void 0);
@@ -7950,7 +7891,7 @@ var __kinetica = (() => {
      * @param callback Optional callback function
      * @returns Promise<Types.CreateVideoResponse> - Promise resolving to the response
      */
-    create_video(attribute, begin, duration_seconds, end, frames_per_second, style, path, style_parameters, options, callback) {
+    create_video(attribute, begin, duration_seconds, end, frames_per_second, style, path2, style_parameters, options, callback) {
       const actualRequest = {
         attribute,
         begin,
@@ -7958,7 +7899,7 @@ var __kinetica = (() => {
         end,
         frames_per_second,
         style,
-        path,
+        path: path2,
         style_parameters,
         options: options ?? {}
       };
@@ -14665,13 +14606,13 @@ var __kinetica = (() => {
       }
     }
   };
-  GPUdb.VERSION = "7.2.3.5";
+  GPUdb.VERSION = "7.2.3.6";
   GPUdb.END_OF_SET = END_OF_SET;
   GPUdb.encode = encode;
   GPUdb.decode = decode;
   GPUdb.decode_regular = decodeRegular;
   GPUdb.decode_no_inf_nan = decodeNoInfNan;
-  GPUdb.api_version = "7.2.3.5";
+  GPUdb.api_version = "7.2.3.6";
   GPUdb.Type = Type;
   GPUdb.RingList = RingList;
   GPUdb.HA_FAILOVER_ORDER = Object.freeze({
@@ -15014,20 +14955,20 @@ var __kinetica = (() => {
           throw err;
         }
       }
-      const fs = await _FileHandler.requireFs("download_and_save");
-      const path = await Promise.resolve().then(() => __toESM(require_path()));
+      const fs2 = await _FileHandler.requireFs("download_and_save");
+      const path2 = path;
       const fileNames = _FileHandler.normaliseFilenames(filenames);
       const response = await this.gpuDB.download_files(fileNames, [], [], this.parse_options(options, "download"));
       if (!Array.isArray(response.file_names) || !Array.isArray(response.file_data) || response.file_names.length !== response.file_data.length) {
         throw new Error("Server returned mismatched file names and file data");
       }
       const destDir = destination && destination.length > 0 ? destination : ".";
-      await fs.promises.mkdir(destDir, { recursive: true });
+      await fs2.promises.mkdir(destDir, { recursive: true });
       const written = [];
       for (let i = 0; i < response.file_names.length; i++) {
         const name = _FileHandler.extract_filename(response.file_names[i], "/");
-        const target = path.join(destDir, name);
-        await fs.promises.writeFile(target, Buffer.from(response.file_data[i], "base64"));
+        const target = path2.join(destDir, name);
+        await fs2.promises.writeFile(target, Buffer.from(response.file_data[i], "base64"));
         written.push(target);
       }
       return written;
@@ -15040,8 +14981,8 @@ var __kinetica = (() => {
      */
     static async sizeOf(file) {
       if (typeof file === "string") {
-        const fs = await _FileHandler.requireFs("upload");
-        return (await fs.promises.stat(file)).size;
+        const fs2 = await _FileHandler.requireFs("upload");
+        return (await fs2.promises.stat(file)).size;
       }
       if (file && typeof file.arrayBuffer === "function") {
         return file.size;
@@ -15064,16 +15005,16 @@ var __kinetica = (() => {
       if (typeof process === "undefined" || !process.versions?.node) {
         throw unavailable();
       }
-      const fs = await Promise.resolve().then(() => __toESM(require_fs()));
-      if (!fs || !fs.promises) {
+      const fs2 = fs;
+      if (!fs2 || !fs2.promises) {
         throw unavailable();
       }
-      return fs;
+      return fs2;
     }
     /** Reads a local file as raw bytes. */
     static async readLocalFileAsBytes(filePath) {
-      const fs = await _FileHandler.requireFs("upload");
-      return new Uint8Array(await fs.promises.readFile(filePath));
+      const fs2 = await _FileHandler.requireFs("upload");
+      return new Uint8Array(await fs2.promises.readFile(filePath));
     }
     /** Reads a local file and base64-encodes it. */
     static async readLocalFileAsBase64(filePath) {

@@ -2,6 +2,18 @@
 
 ## Version 7.2
 
+### Version 7.2.3.6 - 2026-11-12
+
+#### Fixed
+-   The Avro codec's 64-bit bounds were written with `bigint` exponentiation,
+    which a consumer's Babel pipeline could rewrite into `Math.pow` and so
+    throw at module load. They are literals now. The README also says not to
+    re-transpile `dist/browser`.
+
+#### Changed
+-   Removed Node.js built-in imports from browser build.
+
+
 ### Version 7.2.3.5 - 2026-11-11
 
 #### Added
